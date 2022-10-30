@@ -62,12 +62,15 @@ public:
 };
 static thread_local std::map<int, WriteBuf> write_bufs;
 
+static thread_local std::set<int> ready_read_fds;
+
 static thread_local int ep_fd = -1;
 
 static void CloseFd(int fd)
 {
     read_handlers.erase(fd);
     write_bufs.erase(fd);
+    ready_read_fds.erase(fd);
     close(fd);
 }
 
@@ -182,6 +185,9 @@ bool RegConn(int fd, std::function<void (int, const char *, size_t)> on_data_rec
                 CloseFd(conn_fd);
                 return;
             }
+
+            ready_read_fds.insert(conn_fd);
+            return;
         }
     };
 
@@ -246,7 +252,7 @@ void Start()
     {
         static const int kEpollEvCountMax = 1024;
         struct epoll_event evs[kEpollEvCountMax];
-        int ev_count = epoll_wait(ep_fd, evs, kEpollEvCountMax, 100);
+        int ev_count = epoll_wait(ep_fd, evs, kEpollEvCountMax, ready_read_fds.empty() ? 100 : 0);
         if (ev_count == -1)
         {
             if (errno != EINTR)
@@ -254,6 +260,16 @@ void Start()
                 Die(Sprintf("epoll_wait failed: %m"));
             }
             ev_count = 0;
+        }
+        if (ev_count == 0 && !ready_read_fds.empty())
+        {
+            std::set<int> rrfs(std::move(ready_read_fds));
+            ready_read_fds.clear();
+            for (auto fd : rrfs)
+            {
+                auto h = read_handlers[fd];
+                h(fd);
+            }
         }
         for (int i = 0; i < ev_count; ++ i)
         {
