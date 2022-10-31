@@ -3,12 +3,35 @@
 namespace paraldis
 {
 
-static void OnConnDataRecved(int conn_fd, const char *data, size_t len)
+static void OnConnDataRecved(ReqParser::Ptr rp, int conn_fd, const char *data, size_t len)
 {
-    //echo test
-    if (len > 0)
+    if (len == 0)
     {
-        reactor::WriteConn(conn_fd, data, len);
+        return;
+    }
+
+    rp->Feed(data, len);
+    for (;;)
+    {
+        std::vector<std::string> args;
+        if (!rp->PopCmd(args))
+        {
+            Log("bad redis req");
+            reactor::CloseConn(conn_fd);
+            return;
+        }
+        if (args.empty())
+        {
+            return;
+        }
+
+        Log("recved cmd");
+        for (auto const &arg : args)
+        {
+            Log(Sprintf("\t%s", arg.c_str()));
+        }
+
+        reactor::WriteConn(conn_fd, "+OK\r\n", 5);
     }
 }
 
@@ -33,7 +56,11 @@ class Worker
             }
             for (auto conn_fd : new_conns)
             {
-                if (!reactor::RegConn(conn_fd, OnConnDataRecved))
+                if (!reactor::RegConn(
+                    conn_fd,
+                    [rp = ReqParser::New()] (int cfd, const char *data, size_t len) {
+                        OnConnDataRecved(rp, cfd, data, len);
+                    }))
                 {
                     Log("reg new conn failed");
                     close(conn_fd);

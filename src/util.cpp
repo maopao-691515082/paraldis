@@ -44,4 +44,22 @@ void Die(const std::string &msg)
     _exit(1);
 }
 
+bool ParseInt64(const std::string &s, int64_t &v)
+{
+    if (!s.empty() && !isspace(s[0]))
+    {
+        const char *p = s.c_str();
+        size_t len = s.size();
+        const char *end_ptr;
+        errno = 0;
+        long long n = strtoll(p, (char **)&end_ptr, 10);
+        if (*end_ptr == '\0' && end_ptr == p + len && errno == 0)
+        {
+            v = n;
+            return true;
+        }
+    }
+    return false;
+}
+
 }

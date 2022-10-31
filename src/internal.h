@@ -25,6 +25,7 @@
 #include <mutex>
 #include <list>
 #include <thread>
+#include <memory>
 
 #include <sys/time.h>
 #include <unistd.h>
@@ -45,6 +46,7 @@ void Main(int argc, char *argv[]);
 void InitWorkers(size_t worker_count);
 void DeliverConnToWorkers(int conn_fd);
 void StartSvr();
+bool ParseInt64(const std::string &s, int64_t &v);
 
 int64_t NowMS();
 std::string Sprintf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -65,5 +67,17 @@ bool RegEvFd(int fd, std::function<void (uint64_t)> on_ev);
 bool RegConn(int fd, std::function<void (int, const char *, size_t)> on_data_recved);
 
 }
+
+class ReqParser
+{
+public:
+
+    typedef std::shared_ptr<ReqParser> Ptr;
+
+    virtual void Feed(const char *data, size_t len) = 0;
+    virtual bool PopCmd(std::vector<std::string> &args) = 0;
+
+    static Ptr New();
+};
 
 }

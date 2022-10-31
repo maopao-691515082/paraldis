@@ -180,6 +180,11 @@ bool RegConn(int fd, std::function<void (int, const char *, size_t)> on_data_rec
             }
 
             on_data_recved(conn_fd, buf, (size_t)ret);
+            if (read_handlers.count(conn_fd) == 0)
+            {
+                //closed
+                return;
+            }
             if (ret == 0)
             {
                 CloseFd(conn_fd);
