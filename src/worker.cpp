@@ -25,13 +25,10 @@ static void OnConnDataRecved(ReqParser::Ptr rp, int conn_fd, const char *data, s
             return;
         }
 
-        Log("recved cmd");
-        for (auto const &arg : args)
-        {
-            Log(Sprintf("\t%s", arg.c_str()));
-        }
+        std::string rsp;
+        ProcCmd(args, rsp);
 
-        reactor::WriteConn(conn_fd, "+OK\r\n", 5);
+        reactor::WriteConn(conn_fd, rsp.data(), rsp.size());
     }
 }
 

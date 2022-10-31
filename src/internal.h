@@ -80,4 +80,25 @@ public:
     static Ptr New();
 };
 
+class RObj
+{
+public:
+
+    typedef std::shared_ptr<RObj> Ptr;
+
+    virtual ~RObj() = 0;
+};
+
+void ProcCmd(const std::vector<std::string> &args, std::string &rsp);
+void ProcCmdGet(const std::vector<std::string> &args, std::string &rsp);
+void ProcCmdSet(const std::vector<std::string> &args, std::string &rsp);
+
+namespace db
+{
+
+RObj::Ptr GetRObj(const std::string &k);
+void SetRObj(const std::string &k, RObj::Ptr robj);
+
+}
+
 }
