@@ -1,0 +1,10 @@
+public func str_hash(s string) int
+{
+    var s_len = s.len();
+    var h = s_len.<uint>;
+    for (var i : 0 .. s_len)
+    {
+        h = (h + s[i].<uint>) * 1000003u;
+    }
+    return h.<int> & kIntMax;
+}

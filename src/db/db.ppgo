@@ -1,0 +1,36 @@
+import (
+    "../proto";
+    "../util";
+)
+
+final var kSlotCount int = 1000003;
+
+var slots []Slot;
+
+func init()
+{
+    slots.resize(kSlotCount);
+    for (var i : 0 .. kSlotCount)
+    {
+        slots[i] = Slot();
+    }
+}
+
+public func get(client proto.Client, k string)
+{
+    var v, ok = slots[util.str_hash(k) % kSlotCount].get(k);
+    if (ok)
+    {
+        client.send_str(v);
+    }
+    else
+    {
+        client.send_nil();
+    }
+}
+
+public func set(client proto.Client, k string, v string)
+{
+    slots[util.str_hash(k) % kSlotCount].set(k, v);
+    client.send_ok();
+}

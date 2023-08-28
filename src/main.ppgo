@@ -1,0 +1,8 @@
+import (
+    "./svr";
+)
+
+public func main()
+{
+    svr.start();
+}

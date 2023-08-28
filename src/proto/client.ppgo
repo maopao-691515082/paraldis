@@ -1,0 +1,175 @@
+import (
+    "fiber";
+    "io";
+)
+
+class Conn
+{
+    conn fiber.Conn;
+
+    func init(conn fiber.Conn)
+    {
+        this.conn = conn;
+    }
+
+    public func read(b [:]byte) int
+    {
+        return this.conn.read(b);
+    }
+
+    public func write(b [:]byte)
+    {
+        this.conn.write(b, timeout = 1.0);
+    }
+
+    public func write_str(s string)
+    {
+        this.conn.write_str(s, timeout = 1.0);
+    }
+}
+
+public class Client
+{
+    conn Conn;
+    br io.BufReader;
+    bw io.BufWriter;
+
+    public func init(conn fiber.Conn)
+    {
+        this.conn = Conn(conn);
+        this.br = io.BufReader(this.conn);
+        this.bw = io.BufWriter(this.conn);
+    }
+
+    func recv_int() (prefix byte, v int, eof bool)
+    {
+        var b []byte;
+        b.resize(32);
+        var n = this.br.read_until('\n', b);
+        if (n == 0)
+        {
+            eof = true;
+            return;
+        }
+        if (n >= 4 && b[n - 2] == '\r' && b[n - 1] == '\n')
+        {
+            prefix = b[0];
+            var (
+                s = b[1 : n - 2].<string>;
+                exc any;
+            )
+            v, exc = s.parse_int(base = 10);
+            if (exc != nil)
+            {
+                throw("invalid integer in proto %s".(s.repr()));
+            }
+        }
+    }
+
+    public func recv_req() (req []string)
+    {
+        var prefix, v, eof = this.recv_int();
+        if (eof)
+        {
+            return;
+        }
+        var item_count = v;
+        if (!(prefix == '*' && item_count > 0))
+        {
+            throw("invalid req: list len error");
+        }
+        req.resize(item_count);
+        for (var i : 0 .. item_count)
+        {
+            prefix, v, eof = this.recv_int();
+            if (eof)
+            {
+                throw("client closed");
+            }
+            if (!(prefix == '$' && v >= 0))
+            {
+                throw("invalid req: str len error");
+            }
+            if (v > 0)
+            {
+                var b []byte;
+                b.resize(v + 2);
+                if (this.br.read_full(b) != b.len())
+                {
+                    throw("client closed");
+                }
+                if (!(b[v] == '\r' && b[v + 1] == '\n'))
+                {
+                    throw("invalid req: str end CRLF error");
+                }
+                req[i] = b[: v].<string>;
+            }
+        }
+        req[0] = req[0].upper();
+    }
+
+    func replace_crlf(mb [:]byte)
+    {
+        for (var i : 0 .. mb.len())
+        {
+            if (mb[i] == '\r' || mb[i] == '\n')
+            {
+                mb[i] = '\x20';
+            }
+        }
+    }
+
+    public func send_ok(/, msg string)
+    {
+        var b = []byte{'+'};
+        b.extend(msg.get_or("OK").<[]byte>);
+        this.replace_crlf(b);
+        b.append('\r');
+        b.append('\n');
+        this.bw.write(b);
+    }
+
+    public func send_err(msg string, /, type string)
+    {
+        var b = []byte{'-'};
+        b.extend(type.get_or("ERR").<[]byte>);
+        b.append('\x20');
+        b.extend(msg.<[]byte>);
+        this.replace_crlf(b);
+        b.append('\r');
+        b.append('\n');
+        this.bw.write(b);
+    }
+
+    public func send_int(n int)
+    {
+        this.bw.write_str(":%d\r\n".(n));
+    }
+
+    public func send_nil()
+    {
+        this.bw.write_str("$-1\r\n");
+    }
+
+    public func send_str(s string)
+    {
+        this.bw.write_str("$%d\r\n".(s.len()));
+        this.bw.write_str(s);
+        this.bw.write_str("\r\n");
+    }
+
+    public func send_list_len(len int)
+    {
+        this.bw.write_str("*%d\r\n".(len));
+    }
+
+    public func send_nil_list()
+    {
+        this.send_list_len(-1);
+    }
+
+    public func flush()
+    {
+        this.bw.flush();
+    }
+}

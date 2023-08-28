@@ -1,0 +1,53 @@
+import (
+    "fiber";
+
+    "../conf";
+    "../proto";
+    "../db";
+)
+
+class ClientWorker
+{
+    public func run(conn fiber.Conn)
+    {
+        var client = proto.Client(conn);
+        while (true)
+        {
+            var req = client.recv_req();
+            if (req.len() == 0)
+            {
+                return;
+            }
+
+            if (req.len() == 2 && req[0] == "GET")
+            {
+                db.get(client, req[1]);
+            }
+            else if (req.len() == 3 && req[0] == "SET")
+            {
+                db.set(client, req[1], req[2]);
+            }
+            else
+            {
+                client.send_err("invalid cmd");
+            }
+
+            client.flush();
+        }
+    }
+}
+
+class SvrMain
+{
+    public func run()
+    {
+        var listener = fiber.listen_tcp(conf.kPort);
+        println("server start");
+        listener.serve(ClientWorker(), worker_count = conf.kWorkerCount);
+    }
+}
+
+public func start()
+{
+    fiber.run(SvrMain());
+}

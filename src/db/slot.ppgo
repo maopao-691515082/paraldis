@@ -1,0 +1,33 @@
+import (
+    "thread";
+)
+
+class Slot
+{
+    lock thread.Mutex;
+
+    kvs [string]string;
+
+    func init()
+    {
+        this.lock = thread.Mutex();
+    }
+
+    func get(k string) (v string, ok bool)
+    {
+        with (this.lock)
+        {
+            var exc any;
+            v, exc = this.kvs.get(k);
+            ok = exc == nil;
+        }
+    }
+
+    func set(k string, v string)
+    {
+        with (this.lock)
+        {
+            this.kvs[k] = v;
+        }
+    }
+}
