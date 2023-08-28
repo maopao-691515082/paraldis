@@ -13,8 +13,8 @@ class ClientWorker
         var client = proto.Client(conn);
         while (true)
         {
-            var req = client.recv_req();
-            if (req.len() == 0)
+            var req, exc = client.recv_req();
+            if (exc == fiber.kExcConnReset || req.len() == 0)
             {
                 return;
             }
