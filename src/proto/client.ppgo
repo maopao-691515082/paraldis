@@ -59,11 +59,12 @@ public class Client
                 exc any;
             )
             v, exc = s.parse_int(base = 10);
-            if (exc != nil)
+            if (exc == nil)
             {
-                throw("invalid integer in proto %s".(s.repr()));
+                return;
             }
         }
+        throw("invalid integer in proto %s".(s.repr()));
     }
 
     public func recv_req() (req []string)
