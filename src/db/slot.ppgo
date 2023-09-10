@@ -17,9 +17,11 @@ class Slot
     {
         with (this.lock)
         {
+/*
             var exc any;
             v, exc = this.kvs.get(k);
             ok = exc == nil;
+*/
         }
     }
 
@@ -27,7 +29,9 @@ class Slot
     {
         with (this.lock)
         {
+/*
             this.kvs[k] = v;
+*/
         }
     }
 }

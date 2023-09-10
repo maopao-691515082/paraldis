@@ -64,7 +64,7 @@ public class Client
                 return;
             }
         }
-        throw("invalid integer in proto %s".(s.repr()));
+        throw("invalid integer in proto %s".(b.<string>.repr()));
     }
 
     public func recv_req() (req []string)

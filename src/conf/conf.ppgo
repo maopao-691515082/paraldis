@@ -1,6 +1,6 @@
 public final var (
     kPort int = 6379;
-    kWorkerCount int = 4;
+    kWorkerCount int = 8;
 )
 
 func init()
