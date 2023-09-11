@@ -41,16 +41,11 @@ public class Client
         this.bw = io.BufWriter(this.conn);
     }
 
-    func recv_int() (prefix byte, v int, eof bool)
+    func recv_int() (prefix byte, v int)
     {
         var b []byte;
         b.resize(32);
         var n = this.br.read_until('\n', b);
-        if (n == 0)
-        {
-            eof = true;
-            return;
-        }
         if (n >= 4 && b[n - 2] == '\r' && b[n - 1] == '\n')
         {
             prefix = b[0];
@@ -69,11 +64,13 @@ public class Client
 
     public func recv_req() (req []string)
     {
-        var prefix, v, eof = this.recv_int();
-        if (eof)
+        var n = this.br.wait();
+        if (n == 0)
         {
+            //eof
             return;
         }
+        var prefix, v = this.recv_int();
         var item_count = v;
         if (!(prefix == '*' && item_count > 0))
         {
@@ -82,11 +79,7 @@ public class Client
         req.resize(item_count);
         for (var i : 0 .. item_count)
         {
-            prefix, v, eof = this.recv_int();
-            if (eof)
-            {
-                throw("client closed");
-            }
+            prefix, v = this.recv_int();
             if (!(prefix == '$' && v >= 0))
             {
                 throw("invalid req: str len error");
@@ -95,10 +88,7 @@ public class Client
             {
                 var b []byte;
                 b.resize(v + 2);
-                if (this.br.read_full(b) != b.len())
-                {
-                    throw("client closed");
-                }
+                this.br.read_full(b);
                 if (!(b[v] == '\r' && b[v + 1] == '\n'))
                 {
                     throw("invalid req: str end CRLF error");
