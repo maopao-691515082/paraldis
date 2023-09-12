@@ -19,12 +19,16 @@ class Conn
 
     public func write(b [:]byte)
     {
-        this.conn.write(b, timeout = 1.0);
+        fiber.Ctx(timeout = 1.0).call(func () {
+            this.conn.write(b);
+        });
     }
 
     public func write_str(s string)
     {
-        this.conn.write_str(s, timeout = 1.0);
+        fiber.Ctx(timeout = 1.0).call(func () {
+            this.conn.write_str(s);
+        });
     }
 }
 
