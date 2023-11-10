@@ -1,36 +1,22 @@
 import (
-    "../proto";
-    "../util";
+    "db/okv/zkv";
+    "db/okv";
 )
 
-final var kSlotCount int = 1000003;
+final var kDBCount int = 16;
 
-var slots []Slot;
+var dbs []okv.DB;
 
-func init()
+func init_db()
 {
-    slots.resize(kSlotCount);
-    for (var i : 0 .. kSlotCount)
+    dbs.resize(kDBCount);
+    for (var i : 0 .. kDBCount)
     {
-        slots[i] = Slot();
+        dbs[i] = zkv.open();
     }
 }
 
-public func get(client proto.Client, k string)
+func get_db(vslot int) okv.DB
 {
-    var v, ok = slots[util.str_hash(k) % kSlotCount].get(k);
-    if (ok)
-    {
-        client.send_str(v);
-    }
-    else
-    {
-        client.send_nil();
-    }
-}
-
-public func set(client proto.Client, k string, v string)
-{
-    slots[util.str_hash(k) % kSlotCount].set(k, v);
-    client.send_ok();
+    return dbs[vslot % kDBCount];
 }

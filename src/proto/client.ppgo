@@ -45,6 +45,15 @@ public class Client
         this.bw = io.BufWriter(this.conn);
     }
 
+    public func byte_count_read() int
+    {
+        return this.br.byte_count_read();
+    }
+    public func byte_count_written() int
+    {
+        return this.bw.byte_count_written();
+    }
+
     func recv_int() (prefix byte, v int)
     {
         var b []byte;
@@ -88,17 +97,15 @@ public class Client
             {
                 throw("invalid req: str len error");
             }
-            if (v > 0)
+
+            var b []byte;
+            b.resize(v + 2);
+            this.br.read_full(b);
+            if (!(b[v] == '\r' && b[v + 1] == '\n'))
             {
-                var b []byte;
-                b.resize(v + 2);
-                this.br.read_full(b);
-                if (!(b[v] == '\r' && b[v + 1] == '\n'))
-                {
-                    throw("invalid req: str end CRLF error");
-                }
-                req[i] = b[: v].<string>;
+                throw("invalid req: str end CRLF error");
             }
+            req[i] = b[: v].<string>;
         }
         req[0] = req[0].upper();
     }
@@ -116,12 +123,19 @@ public class Client
 
     public func send_ok(/, msg string)
     {
-        var b = []byte{'+'};
-        b.extend(msg.get_or("OK").<[]byte>);
-        this.replace_crlf(b);
-        b.append('\r');
-        b.append('\n');
-        this.bw.write(b);
+        if (msg.valid())
+        {
+            var b = []byte{'+'};
+            b.extend(msg.get().<[]byte>);
+            this.replace_crlf(b);
+            b.append('\r');
+            b.append('\n');
+            this.bw.write(b);
+        }
+        else
+        {
+            this.bw.write_str("+OK\r\n");
+        }
     }
 
     public func send_err(msg string, /, type string)

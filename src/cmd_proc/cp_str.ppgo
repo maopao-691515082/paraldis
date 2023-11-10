@@ -1,0 +1,55 @@
+import (
+    "../proto";
+    "../db";
+)
+
+class CP_GET
+{
+    k string;
+
+    func parse(req [:]string) bool
+    {
+        if (req.len() == 1)
+        {
+            this.k = req[0];
+            return true;
+        }
+        return false;
+    }
+
+    func key() string
+    {
+        return this.k;
+    }
+
+    public func do_read(client proto.Client, vsr db.VSlotReader)
+    {
+        client.send_err("todo");
+    }
+}
+
+class CP_SET
+{
+    k, v string;
+
+    func parse(req [:]string) bool
+    {
+        if (req.len() == 2)
+        {
+            this.k = req[0];
+            this.v = req[1];
+            return true;
+        }
+        return false;
+    }
+
+    func key() string
+    {
+        return this.k;
+    }
+
+    public func do_write(client proto.Client, vsw db.VSlotWriter)
+    {
+        client.send_err("todo");
+    }
+}

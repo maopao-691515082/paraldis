@@ -1,0 +1,5 @@
+func init()
+{
+    init_db();
+    init_vslot();
+}

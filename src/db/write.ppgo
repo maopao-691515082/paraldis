@@ -1,0 +1,30 @@
+import (
+    "db/okv";
+    "../proto";
+)
+
+public class VSlotWriter
+{
+    vslot int;
+    snapshot okv.Snapshot;
+
+    func init(vslot int)
+    {
+        this.vslot = vslot;
+        this.snapshot = get_db(vslot).new_snapshot();
+    }
+}
+
+public interface CmdWriteProc
+{
+    public do_write(client proto.Client, vsw VSlotWriter);
+}
+
+public func do_write(client proto.Client, cwp CmdWriteProc, hash_tag string)
+{
+    var vslot = hash_tag_to_vslot(hash_tag);
+    with (vslot_write_locks[vslot])
+    {
+        cwp.do_write(client, VSlotWriter(vslot));
+    }
+}

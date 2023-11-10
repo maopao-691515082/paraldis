@@ -1,0 +1,36 @@
+import (
+    "../proto";
+)
+
+class CP_PING
+{
+    func parse(req [:]string) bool
+    {
+        return req.len() == 0;
+    }
+
+    func no_key_do(client proto.Client)
+    {
+        client.send_ok(msg = "PONG");
+    }
+}
+
+class CP_ECHO
+{
+    msg string;
+
+    func parse(req [:]string) bool
+    {
+        if (req.len() == 1)
+        {
+            this.msg = req[0];
+            return true;
+        }
+        return false;
+    }
+
+    func no_key_do(client proto.Client)
+    {
+        client.send_str(this.msg);
+    }
+}

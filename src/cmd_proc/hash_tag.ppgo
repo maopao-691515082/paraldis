@@ -1,0 +1,13 @@
+func get_hash_tag(k string) string
+{
+    var bi = k.index_byte('{');
+    if (bi >= 0)
+    {
+        var ei = k[bi + 1 :].index_byte('}');
+        if (ei > 0)
+        {
+            return k[bi + 1 : bi + 1 + ei];
+        }
+    }
+    return k;
+}

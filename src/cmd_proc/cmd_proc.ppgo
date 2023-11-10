@@ -1,0 +1,107 @@
+import (
+    "../proto";
+    "../db";
+)
+
+interface CmdProc
+{
+    parse(req [:]string) bool;
+}
+
+interface CPNoKey
+{
+    no_key_do(client proto.Client);
+}
+
+interface CPSingleKey
+{
+    key() string;
+}
+
+interface CPMultiKey
+{
+    keys() []string;
+}
+
+public func proc_cmd(client proto.Client, cmd string, req [:]string)
+{
+    var cp CmdProc;
+
+    if (cmd == "PING")
+    {
+        cp = CP_PING();
+    }
+    else if (cmd == "ECHO")
+    {
+        cp = CP_ECHO();
+    }
+    else if (cmd == "GET")
+    {
+        cp = CP_GET();
+    }
+    else if (cmd == "SET")
+    {
+        cp = CP_SET();
+    }
+    else
+    {
+        client.send_err("unknown command");
+        return;
+    }
+
+    if (!cp.parse(req))
+    {
+        client.send_err("syntax error");
+        return;
+    }
+
+    {
+        var cpnk, exc = cp.<CPNoKey>;
+        if (exc == nil)
+        {
+            cpnk.no_key_do(client);
+            return;
+        }
+    }
+
+    var hash_tag string;
+    {
+        var cpsk, exc = cp.<CPSingleKey>;
+        if (exc == nil)
+        {
+            hash_tag = get_hash_tag(cpsk.key());
+        }
+        else
+        {
+            var keys = cp.<CPMultiKey>.keys();
+            hash_tag = get_hash_tag(keys[0]);
+            for (var i : 1 .. keys.len())
+            {
+                if (hash_tag != get_hash_tag(keys[i]))
+                {
+                    client.send_err("keys must be in the same hash_tag");
+                    return;
+                }
+            }
+        }
+    }
+
+    {
+        var crp, exc = cp.<db.CmdReadProc>;
+        if (exc == nil)
+        {
+            db.do_read(client, crp, hash_tag);
+            return;
+        }
+    }
+    {
+        var cwp, exc = cp.<db.CmdWriteProc>;
+        if (exc == nil)
+        {
+            db.do_write(client, cwp, hash_tag);
+            return;
+        }
+    }
+
+    client.send_err("command not implemented");
+}

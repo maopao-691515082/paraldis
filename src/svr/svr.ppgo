@@ -3,7 +3,7 @@ import (
 
     "../conf";
     "../proto";
-    "../db";
+    "../cmd_proc";
 )
 
 class ClientWorker
@@ -27,18 +27,7 @@ class ClientWorker
                 return;
             }
 
-            if (req.len() == 2 && req[0] == "GET")
-            {
-                db.get(client, req[1]);
-            }
-            else if (req.len() == 3 && req[0] == "SET")
-            {
-                db.set(client, req[1], req[2]);
-            }
-            else
-            {
-                client.send_err("invalid cmd");
-            }
+            cmd_proc.proc_cmd(client, req[0], req[1 :]);
 
             client.flush();
         }

@@ -1,0 +1,22 @@
+import (
+    "thread";
+    "../util";
+)
+
+final var kVSlotCount int = 0x10000;
+
+var vslot_write_locks []thread.Mutex;
+
+func init_vslot()
+{
+    vslot_write_locks.resize(kVSlotCount);
+    for (var i : 0 .. kVSlotCount)
+    {
+        vslot_write_locks[i] = thread.Mutex();
+    }
+}
+
+func hash_tag_to_vslot(hash_tag string) int
+{
+    return util.str_hash(hash_tag) % kVSlotCount;
+}
