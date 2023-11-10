@@ -5,22 +5,22 @@ import (
 
 interface CmdProc
 {
-    parse(req [:]string) bool;
+    func parse(req [:]string) bool;
 }
 
 interface CPNoKey
 {
-    no_key_do(client proto.Client);
+    func no_key_do(client proto.Client);
 }
 
 interface CPSingleKey
 {
-    key() string;
+    func key() string;
 }
 
 interface CPMultiKey
 {
-    keys() []string;
+    func keys() []string;
 }
 
 public func proc_cmd(client proto.Client, cmd string, req [:]string)

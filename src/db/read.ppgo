@@ -17,7 +17,7 @@ public class VSlotReader
 
 public interface CmdReadProc
 {
-    public do_read(client proto.Client, vsr VSlotReader);
+    public func do_read(client proto.Client, vsr VSlotReader);
 }
 
 public func do_read(client proto.Client, crp CmdReadProc, hash_tag string)

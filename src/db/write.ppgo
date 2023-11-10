@@ -17,7 +17,7 @@ public class VSlotWriter
 
 public interface CmdWriteProc
 {
-    public do_write(client proto.Client, vsw VSlotWriter);
+    public func do_write(client proto.Client, vsw VSlotWriter);
 }
 
 public func do_write(client proto.Client, cwp CmdWriteProc, hash_tag string)
