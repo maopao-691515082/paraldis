@@ -1,22 +1,155 @@
 import (
     "thread";
+    "encoding/var_int";
+    "db/okv";
+    "time";
     "../util";
 )
 
 final var kVSlotCount int = 0x10000;
 
+class VSlotKeyStyle
+{
+    meta_prefix string;
+    data_seq    string;
+    data_prefix string;
+}
+var vslot_key_styles []VSlotKeyStyle;
+
 var vslot_write_locks []thread.Mutex;
 
 func init_vslot()
 {
+    vslot_key_styles.resize(kVSlotCount);
     vslot_write_locks.resize(kVSlotCount);
     for (var i : 0 .. kVSlotCount)
     {
+        var vsid_prefix = var_int.encode(i);
+        vslot_key_styles[i] = VSlotKeyStyle();
+        vslot_key_styles[i].meta_prefix = vsid_prefix + "M";
+        vslot_key_styles[i].data_seq = vsid_prefix + "S";
+        vslot_key_styles[i].data_prefix = vsid_prefix + "D";
+
         vslot_write_locks[i] = thread.Mutex();
     }
 }
 
-func hash_tag_to_vslot(hash_tag string) int
+func hash_tag_to_vslot_id(hash_tag string) int
 {
     return util.str_hash(hash_tag) % kVSlotCount;
+}
+
+public class VSlot
+{
+    id int;
+    read_only bool;
+    snapshot okv.Snapshot;
+
+    func init(id int, /, read_only bool)
+    {
+        this.id = id;
+        this.read_only = read_only.get_or(false);
+        this.snapshot = get_db(id).new_snapshot();
+    }
+
+    func meta_key(k string) string
+    {
+        return vslot_key_styles[this.id].meta_prefix + k;
+    }
+
+    func decode_meta(m string) (tp int, expire_at_ms int, len int, data_seq int, payload_idx int)
+    {
+        var idx = 0;
+        tp, idx = var_int.decode(m, idx);
+        expire_at_ms, idx = var_int.decode(m, idx);
+        len, idx = var_int.decode(m, idx);
+        data_seq, idx = var_int.decode(m, idx);
+        payload_idx = idx;
+    }
+
+    func del_raw(mk string, data_seq int)
+    {
+        var dks []string;
+        var data_key_prefix = vslot_key_styles[this.id].data_prefix + var_int.encode(data_seq);
+        var iter = this.snapshot.new_iter();
+        iter.seek(data_key_prefix);
+        while (iter.valid())
+        {
+            var dk = iter.key();
+            if (!dk.has_prefix(data_key_prefix))
+            {
+                break;
+            }
+            dks.append(dk);
+            iter.next();
+        }
+        for (var _, dk : dks)
+        {
+            this.snapshot.del(dk);
+        }
+        this.snapshot.del(mk);
+    }
+
+    public func get_robj_meta(k string) (tp int, expire_at_ms int, len int, data_seq int, payload string)
+    {
+        var mk = this.meta_key(k);
+        var m, ok = this.snapshot.get(mk);
+        if (!ok)
+        {
+            tp = kRObjType_None;
+            return;
+        }
+
+        var payload_idx int;
+        tp, expire_at_ms, len, data_seq, payload_idx = this.decode_meta(m);
+        if (expire_at_ms >= 0 && expire_at_ms < time.now_ms())
+        {
+            if (!this.read_only)
+            {
+                this.del_raw(mk, data_seq);
+            }
+            tp = kRObjType_None;
+            return;
+        }
+        payload = m[payload_idx :];
+    }
+
+    public func new_robj_meta(k string, tp int, len int, /, expire_at_ms int, payload string) (data_seq int)
+    {
+        var data_seq_key = vslot_key_styles[this.id].data_seq;
+
+        {
+            var data_seq_str, ok = this.snapshot.get(data_seq_key);
+            if (ok)
+            {
+                var idx = 0;
+                data_seq, idx = var_int.decode(data_seq_str, idx);
+                assert(idx == data_seq_str.len());
+            }
+        }
+
+        var mk = this.meta_key(k);
+        ++ data_seq;
+        var m_parts = []string{
+            var_int.encode(tp),
+            var_int.encode(expire_at_ms.get_or(-1)),
+            var_int.encode(len),
+            var_int.encode(data_seq),
+            payload.get_or(""),
+        };
+
+        this.snapshot.set(data_seq_key, var_int.encode(data_seq));
+        this.snapshot.set(mk, "".join(m_parts));
+    }
+
+    public func del(k string)
+    {
+        var mk = this.meta_key(k);
+        var m, ok = this.snapshot.get(mk);
+        if (ok)
+        {
+            var _, _, _, data_seq, _ = this.decode_meta(m);
+            this.del_raw(mk, data_seq);
+        }
+    }
 }

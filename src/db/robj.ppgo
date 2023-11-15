@@ -1,0 +1,8 @@
+public final var (
+    kRObjType_None  int = 0;
+    kRObjType_Str   int = 1;
+    kRObjType_List  int = 2;
+    kRObjType_Hash  int = 3;
+    kRObjType_Set   int = 4;
+    kRObjType_ZSet  int = 5;
+)

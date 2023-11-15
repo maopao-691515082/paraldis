@@ -3,6 +3,20 @@ import (
     "../db";
 )
 
+func read_on_str(client proto.Client, vs db.VSlot, k string, f func (string, bool))
+{
+    var tp, _, _, _, v = vs.get_robj_meta(k);
+    if (tp == db.kRObjType_None || tp == db.kRObjType_Str)
+    {
+        f(v, tp == db.kRObjType_Str);
+        return;
+    }
+
+    client.send_err(
+        "Operation against a key holding the wrong kind of value",
+        type = "WRONGTYPE");
+}
+
 class CP_GET
 {
     k string;
@@ -22,9 +36,21 @@ class CP_GET
         return this.k;
     }
 
-    public func do_read(client proto.Client, vsr db.VSlotReader)
+    public func do_read(client proto.Client, vs db.VSlot)
     {
-        client.send_err("todo");
+        read_on_str(
+            client, vs, this.k,
+            func (v string, ok bool) {
+                if (ok)
+                {
+                    client.send_str(v);
+                }
+                else
+                {
+                    client.send_nil();
+                }
+            },
+        );
     }
 }
 
@@ -48,8 +74,10 @@ class CP_SET
         return this.k;
     }
 
-    public func do_write(client proto.Client, vsw db.VSlotWriter)
+    public func do_write(client proto.Client, vs db.VSlot)
     {
-        client.send_err("todo");
+        vs.del(this.k);
+        vs.new_robj_meta(this.k, db.kRObjType_Str, this.v.len(), payload = this.v);
+        client.send_ok();
     }
 }

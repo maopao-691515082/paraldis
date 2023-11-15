@@ -16,7 +16,7 @@ func init_db()
     }
 }
 
-func get_db(vslot int) okv.DB
+func get_db(vslot_id int) okv.DB
 {
-    return dbs[vslot % kDBCount];
+    return dbs[vslot_id % kDBCount];
 }

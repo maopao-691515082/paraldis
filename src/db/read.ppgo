@@ -1,26 +1,13 @@
 import (
-    "db/okv";
     "../proto";
 )
 
-public class VSlotReader
-{
-    vslot int;
-    snapshot okv.Snapshot;
-
-    func init(vslot int)
-    {
-        this.vslot = vslot;
-        this.snapshot = get_db(vslot).new_snapshot();
-    }
-}
-
 public interface CmdReadProc
 {
-    public func do_read(client proto.Client, vsr VSlotReader);
+    public func do_read(client proto.Client, vs VSlot);
 }
 
 public func do_read(client proto.Client, crp CmdReadProc, hash_tag string)
 {
-    crp.do_read(client, VSlotReader(hash_tag_to_vslot(hash_tag)));
+    crp.do_read(client, VSlot(hash_tag_to_vslot_id(hash_tag), read_only = true));
 }
