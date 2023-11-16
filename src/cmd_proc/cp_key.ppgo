@@ -24,10 +24,16 @@ class CP_DEL
 
     public func do_write(client proto.Client, vs db.VSlot)
     {
+        var del_count = 0;
         for (var _, k : this.ks)
         {
-            vs.del(k);
+            var tp, _, _, _, _ = vs.get_robj_meta(k);
+            if (tp != db.kRObjType_None)
+            {
+                vs.del(k);
+                ++ del_count;
+            }
         }
-        client.send_ok();
+        client.send_int(del_count);
     }
 }

@@ -76,7 +76,6 @@ class CP_SET
 
     public func do_write(client proto.Client, vs db.VSlot)
     {
-        vs.del(this.k);
         vs.new_robj_meta(this.k, db.kRObjType_Str, this.v.len(), payload = this.v);
         client.send_ok();
     }
