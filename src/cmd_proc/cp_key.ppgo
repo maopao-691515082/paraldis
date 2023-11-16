@@ -1,0 +1,33 @@
+import (
+    "../proto";
+    "../db";
+)
+
+class CP_DEL
+{
+    ks []string;
+
+    func parse(req [:]string) bool
+    {
+        if (req.len() > 0)
+        {
+            this.ks.extend(req);
+            return true;
+        }
+        return false;
+    }
+
+    func keys() []string
+    {
+        return this.ks;
+    }
+
+    public func do_write(client proto.Client, vs db.VSlot)
+    {
+        for (var _, k : this.ks)
+        {
+            vs.del(k);
+        }
+        client.send_ok();
+    }
+}

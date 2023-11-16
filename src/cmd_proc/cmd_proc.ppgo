@@ -35,6 +35,10 @@ public func proc_cmd(client proto.Client, cmd string, req [:]string)
     {
         cp = CP_ECHO();
     }
+    else if (cmd == "DEL")
+    {
+        cp = CP_DEL();
+    }
     else if (cmd == "GET")
     {
         cp = CP_GET();

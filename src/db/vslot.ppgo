@@ -10,9 +10,32 @@ final var kVSlotCount int = 0x10000;
 
 class VSlotKeyStyle
 {
-    meta_prefix string;
-    data_seq    string;
-    data_prefix string;
+    meta_prefix, data_seq_k, data_gc_tag_prefix, data_prefix string;
+
+    func init(vsid int)
+    {
+        var vsid_prefix = var_int.encode(vsid);
+
+        this.meta_prefix        = vsid_prefix + "M";
+        this.data_seq_k         = vsid_prefix + "S";
+        this.data_gc_tag_prefix = vsid_prefix + "G";
+        this.data_prefix        = vsid_prefix + "D";
+    }
+
+    func meta_key(k string) string
+    {
+        return this.meta_prefix + k;
+    }
+
+    func data_gc_tag(data_seq int) string
+    {
+        return this.data_gc_tag_prefix + var_int.encode(data_seq);
+    }
+
+    func data_key_prefix(data_seq int) string
+    {
+        return this.data_prefix + var_int.encode(data_seq);
+    }
 }
 var vslot_key_styles []VSlotKeyStyle;
 
@@ -24,12 +47,7 @@ func init_vslot()
     vslot_write_locks.resize(kVSlotCount);
     for (var i : 0 .. kVSlotCount)
     {
-        var vsid_prefix = var_int.encode(i);
-        vslot_key_styles[i] = VSlotKeyStyle();
-        vslot_key_styles[i].meta_prefix = vsid_prefix + "M";
-        vslot_key_styles[i].data_seq = vsid_prefix + "S";
-        vslot_key_styles[i].data_prefix = vsid_prefix + "D";
-
+        vslot_key_styles[i] = VSlotKeyStyle(i);
         vslot_write_locks[i] = thread.Mutex();
     }
 }
@@ -41,20 +59,15 @@ func hash_tag_to_vslot_id(hash_tag string) int
 
 public class VSlot
 {
-    id int;
+    k_style VSlotKeyStyle;
     read_only bool;
     snapshot okv.Snapshot;
 
     func init(id int, /, read_only bool)
     {
-        this.id = id;
+        this.k_style = vslot_key_styles[id];
         this.read_only = read_only.get_or(false);
         this.snapshot = get_db(id).new_snapshot();
-    }
-
-    func meta_key(k string) string
-    {
-        return vslot_key_styles[this.id].meta_prefix + k;
     }
 
     func decode_meta(m string) (tp int, expire_at_ms int, len int, data_seq int, payload_idx int)
@@ -67,32 +80,9 @@ public class VSlot
         payload_idx = idx;
     }
 
-    func del_raw(mk string, data_seq int)
-    {
-        var dks []string;
-        var data_key_prefix = vslot_key_styles[this.id].data_prefix + var_int.encode(data_seq);
-        var iter = this.snapshot.new_iter();
-        iter.seek(data_key_prefix);
-        while (iter.valid())
-        {
-            var dk = iter.key();
-            if (!dk.has_prefix(data_key_prefix))
-            {
-                break;
-            }
-            dks.append(dk);
-            iter.next();
-        }
-        for (var _, dk : dks)
-        {
-            this.snapshot.del(dk);
-        }
-        this.snapshot.del(mk);
-    }
-
     public func get_robj_meta(k string) (tp int, expire_at_ms int, len int, data_seq int, payload string)
     {
-        var mk = this.meta_key(k);
+        var mk = this.k_style.meta_key(k);
         var m, ok = this.snapshot.get(mk);
         if (!ok)
         {
@@ -106,7 +96,7 @@ public class VSlot
         {
             if (!this.read_only)
             {
-                this.del_raw(mk, data_seq);
+                this.snapshot.del(mk);
             }
             tp = kRObjType_None;
             return;
@@ -116,20 +106,25 @@ public class VSlot
 
     public func new_robj_meta(k string, tp int, len int, /, expire_at_ms int, payload string) (data_seq int)
     {
-        var data_seq_key = vslot_key_styles[this.id].data_seq;
-
+        if (payload.valid())
         {
-            var data_seq_str, ok = this.snapshot.get(data_seq_key);
+            data_seq = -1;
+        }
+        else
+        {
+            var data_seq_k = this.k_style.data_seq_k;
+            var data_seq_str, ok = this.snapshot.get(data_seq_k);
             if (ok)
             {
                 var idx = 0;
                 data_seq, idx = var_int.decode(data_seq_str, idx);
                 assert(idx == data_seq_str.len());
             }
+            ++ data_seq;
+            this.snapshot.set(data_seq_k, var_int.encode(data_seq));
         }
 
-        var mk = this.meta_key(k);
-        ++ data_seq;
+        var mk = this.k_style.meta_key(k);
         var m_parts = []string{
             var_int.encode(tp),
             var_int.encode(expire_at_ms.get_or(-1)),
@@ -137,19 +132,15 @@ public class VSlot
             var_int.encode(data_seq),
             payload.get_or(""),
         };
-
-        this.snapshot.set(data_seq_key, var_int.encode(data_seq));
+        if (data_seq >= 0)
+        {
+            this.snapshot.set(this.k_style.data_gc_tag(data_seq), k);
+        }
         this.snapshot.set(mk, "".join(m_parts));
     }
 
     public func del(k string)
     {
-        var mk = this.meta_key(k);
-        var m, ok = this.snapshot.get(mk);
-        if (ok)
-        {
-            var _, _, _, data_seq, _ = this.decode_meta(m);
-            this.del_raw(mk, data_seq);
-        }
+        this.snapshot.del(this.k_style.meta_key(k));
     }
 }
