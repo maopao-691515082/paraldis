@@ -176,6 +176,10 @@ public class Client
     {
         this.send_list_len(-1);
     }
+    public func send_empty_list()
+    {
+        this.send_list_len(0);
+    }
 
     public func flush()
     {

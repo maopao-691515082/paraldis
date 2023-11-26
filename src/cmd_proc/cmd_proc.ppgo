@@ -47,6 +47,14 @@ public func proc_cmd(client proto.Client, cmd string, req [:]string)
     {
         cp = CP_SET();
     }
+    else if (cmd == "ZADD")
+    {
+        cp = CP_ZADD();
+    }
+    else if (cmd == "ZRANGE")
+    {
+        cp = CP_ZRANGE();
+    }
     else
     {
         client.send_err("unknown command");

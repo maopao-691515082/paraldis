@@ -1,0 +1,189 @@
+import (
+    "../proto";
+    "../db";
+)
+
+class CP_ZADD
+{
+    k string;
+    scores []f64;
+    members []string;
+
+    func parse(req [:]string) bool
+    {
+        if (req.len() > 1 && req.len() % 2 == 1)
+        {
+            this.k = req[0];
+            req = req[1 :];
+            while (req.len() > 0)
+            {
+                var score, exc = req[0].parse_float();
+                if (!(exc == nil && score >= -(kF64Max.<float>) && score <= kF64Max.<float>))
+                {
+                    return false;
+                }
+                this.scores.append(score.<f64>);
+                this.members.append(req[1]);
+                req = req[2 :];
+            }
+            return true;
+        }
+        return false;
+    }
+
+    func key() string
+    {
+        return this.k;
+    }
+
+    public func do_write(client proto.Client, vs db.VSlot) (failed bool)
+    {
+        var tp, expire_at_ms, len, data_seq, payload = vs.get_robj_meta(this.k);
+
+        if (tp == db.kRObjType_None)
+        {
+            //create new
+            len = this.scores.len();
+            data_seq = vs.new_robj_meta(this.k, db.kRObjType_ZSet, len);
+            for (var i : 0 .. len)
+            {
+                vs.new_zset_member(data_seq, this.scores[i], this.members[i]);
+            }
+            client.send_int(len);
+            return;
+        }
+
+        if (tp != db.kRObjType_ZSet)
+        {
+            client.send_err(
+                "Operation against a key holding the wrong kind of value",
+                type = "WRONGTYPE");
+            failed = true;
+            return;
+        }
+
+        //modify old
+        var add_count = 0;
+        for (var i : 0 .. this.scores.len())
+        {
+            var member = this.members[i];
+            var old_score, ok = vs.get_zset_member_score(data_seq, member);
+            if (ok)
+            {
+                //exists
+                vs.del_zset_member(data_seq, old_score, member);
+            }
+            else
+            {
+                //not exists
+                ++ add_count;
+            }
+            vs.new_zset_member(data_seq, this.scores[i], member);
+        }
+        if (add_count > 0)
+        {
+            vs.update_robj_meta(this.k, tp, expire_at_ms, len + add_count, data_seq, payload);
+        }
+        client.send_int(add_count);
+    }
+}
+
+class CP_ZRANGE
+{
+    k string;
+    start, stop int;
+    with_scores bool;
+
+    func parse(req [:]string) bool
+    {
+        if (req.len() == 4 && req[3].upper() == "WITHSCORES")
+        {
+            this.with_scores = true;
+            req = req[0 : 3];
+        }
+        if (req.len() == 3)
+        {
+            this.k = req[0];
+            var exc any;
+            this.start, exc = req[1].parse_int();
+            if (exc == nil)
+            {
+                this.stop, exc = req[2].parse_int();
+            }
+            if (exc != nil)
+            {
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
+    func key() string
+    {
+        return this.k;
+    }
+
+    public func do_read(client proto.Client, vs db.VSlot)
+    {
+        var tp, _, len, data_seq, _ = vs.get_robj_meta(this.k);
+        if (tp == db.kRObjType_None)
+        {
+            client.send_empty_list();
+            return;
+        }
+
+        if (tp != db.kRObjType_ZSet)
+        {
+            client.send_err(
+                "Operation against a key holding the wrong kind of value",
+                type = "WRONGTYPE");
+            return;
+        }
+
+        var (
+            start = this.start;
+            stop = this.stop;
+        )
+        if (start < 0)
+        {
+            start += len;
+        }
+        if (start < 0)
+        {
+            start = 0;
+        }
+        if (stop < 0)
+        {
+            stop += len;
+        }
+        if (stop >= len)
+        {
+            stop = len - 1;
+        }
+        if (start > stop)
+        {
+            client.send_empty_list();
+            return;
+        }
+
+        var count = stop + 1 - start;
+        client.send_list_len(count * 2 if this.with_scores else count);
+        vs.iter_zset_member(
+            data_seq, start,
+            func (score f64, member string) (stop_iter bool) {
+                if (count <= 0)
+                {
+                    stop_iter = true;
+                    return;
+                }
+                -- count;
+                client.send_str(member);
+                if (this.with_scores)
+                {
+                    client.send_str("%.17g".(score));
+                }
+            },
+        );
+    }
+}

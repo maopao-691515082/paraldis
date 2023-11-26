@@ -4,7 +4,7 @@ import (
 
 public interface CmdWriteProc
 {
-    public func do_write(client proto.Client, vs VSlot);
+    public func do_write(client proto.Client, vs VSlot) (failed bool);
 }
 
 public func do_write(client proto.Client, cwp CmdWriteProc, hash_tag string)
@@ -13,7 +13,10 @@ public func do_write(client proto.Client, cwp CmdWriteProc, hash_tag string)
     with (vslot_write_locks[id])
     {
         var vs = VSlot(id, read_only = false);
-        cwp.do_write(client, vs);
-        get_db(id).write(vs.snapshot.export_wb());
+        var failed = cwp.do_write(client, vs);
+        if (!failed)
+        {
+            get_db(id).write(vs.snapshot.export_wb());
+        }
     }
 }

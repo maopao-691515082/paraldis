@@ -36,6 +36,21 @@ class VSlotKeyStyle
     {
         return this.data_prefix + var_int.encode(data_seq);
     }
+
+    func zset_member_key(data_seq int, member string) string
+    {
+        return this.data_key_prefix(data_seq) + "M" + member;
+    }
+    func zset_rank_key_prefix(data_seq int) string
+    {
+        return this.data_key_prefix(data_seq) + "S";
+    }
+    func zset_rank_key(data_seq int, score f64, member string) string
+    {
+        return this.zset_rank_key_prefix(data_seq) + var_int.encode(this.f64_rank_num(score)) + member;
+    }
+    func f64_rank_num(score f64) int;
+    func f64_from_rank_num(n int) f64;
 }
 var vslot_key_styles []VSlotKeyStyle;
 
@@ -139,8 +154,76 @@ public class VSlot
         this.snapshot.set(mk, "".join(m_parts));
     }
 
+    public func update_robj_meta(k string, tp int, expire_at_ms int, len int, data_seq int, payload string)
+    {
+        var mk = this.k_style.meta_key(k);
+        var m_parts = []string{
+            var_int.encode(tp),
+            var_int.encode(expire_at_ms),
+            var_int.encode(len),
+            var_int.encode(data_seq),
+            payload,
+        };
+        this.snapshot.set(mk, "".join(m_parts));
+    }
+
     public func del(k string)
     {
         this.snapshot.del(this.k_style.meta_key(k));
+    }
+
+    public func new_zset_member(data_seq int, score f64, member string)
+    {
+        this.snapshot.set(
+            this.k_style.zset_member_key(data_seq, member),
+            var_int.encode(this.k_style.f64_rank_num(score)));
+        this.snapshot.set(
+            this.k_style.zset_rank_key(data_seq, score, member), "");
+    }
+
+    public func get_zset_member_score(data_seq int, member string) (score f64, ok bool)
+    {
+        var v string;
+        v, ok = this.snapshot.get(this.k_style.zset_member_key(data_seq, member));
+        if (!ok)
+        {
+            return;
+        }
+
+        var n, idx = var_int.decode(v, 0);
+        assert(idx == v.len());
+        score = this.k_style.f64_from_rank_num(n);
+        ok = true;
+    }
+
+    public func del_zset_member(data_seq int, score f64, member string)
+    {
+        this.snapshot.del(this.k_style.zset_member_key(data_seq, member));
+        this.snapshot.del(this.k_style.zset_rank_key(data_seq, score, member));
+    }
+
+    public func iter_zset_member(data_seq int, start int, f func(f64, string) (/*stop*/ bool))
+    {
+        var kp = this.k_style.zset_rank_key_prefix(data_seq);
+        var iter = this.snapshot.new_iter();
+        iter.seek(kp);
+        if (start > 0)
+        {
+            iter.move(start);
+        }
+        while (iter.valid())
+        {
+            var k = iter.key();
+            if (!k.has_prefix(kp))
+            {
+                break;
+            }
+            var n, idx = var_int.decode(k, kp.len());
+            if (f(this.k_style.f64_from_rank_num(n), k[idx :]))
+            {
+                break;
+            }
+            iter.next();
+        }
     }
 }
